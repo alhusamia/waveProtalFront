@@ -5,7 +5,7 @@ import abi from "../utils/WavePortal.json";
 const App = () => {
   const [currentAccount, setCurrentAccount] = useState("");
   const [allWaves, setAllWaves] = useState([]);
-  const contractAddress = "0xe8Abb23FDACDE94Ce5acFc3658fcD167078D6602";
+  const contractAddress = "0xe93f29aD71Fa34e53554285BD1b7B18F899Bd04C";
   const contractABI = abi.abi;
 
   const [message, setMessage] = useState("");
@@ -70,7 +70,9 @@ const App = () => {
         let count = await wavePortalContract.getTotalWaves();
         console.log("Retrieved total wave count...", count.toNumber());
 
-        const waveTxn = await wavePortalContract.wave(message);
+        const waveTxn = await wavePortalContract.wave(message, {
+          gasLimit: 300000,
+        });
         console.log("Mining...", waveTxn.hash);
 
         await waveTxn.wait();
@@ -87,8 +89,9 @@ const App = () => {
   };
 
   const getAllWaves = async () => {
+    const { ethereum } = window;
+
     try {
-      const { ethereum } = window;
       if (ethereum) {
         const provider = new ethers.providers.Web3Provider(ethereum);
         const signer = provider.getSigner();
@@ -97,16 +100,14 @@ const App = () => {
           contractABI,
           signer
         );
-
         const waves = await wavePortalContract.getAllWaves();
 
-        let wavesCleaned = [];
-        waves.forEach((wave) => {
-          wavesCleaned.push({
+        const wavesCleaned = waves.map((wave) => {
+          return {
             address: wave.waver,
             timestamp: new Date(wave.timestamp * 1000),
             message: wave.message,
-          });
+          };
         });
 
         setAllWaves(wavesCleaned);
@@ -119,6 +120,40 @@ const App = () => {
   };
 
   useEffect(() => {
+    let wavePortalContract;
+
+    const onNewWave = (from, timestamp, message) => {
+      console.log("NewWave", from, timestamp, message);
+      setAllWaves((prevState) => [
+        ...prevState,
+        {
+          address: from,
+          timestamp: new Date(timestamp * 1000),
+          message: message,
+        },
+      ]);
+    };
+
+    if (window.ethereum) {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+
+      wavePortalContract = new ethers.Contract(
+        contractAddress,
+        contractABI,
+        signer
+      );
+      wavePortalContract.on("NewWave", onNewWave);
+    }
+
+    return () => {
+      if (wavePortalContract) {
+        wavePortalContract.off("NewWave", onNewWave);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     checkIfWalletIsConnected();
     getAllWaves();
   }, []);
@@ -129,8 +164,8 @@ const App = () => {
         <div className="header">👋 Hey there!</div>
 
         <div className="bio">
-          I am Yazan and I worked on self-driving cars so that's pretty cool
-          right? Connect your Ethereum wallet and wave at me!
+          I am Yazan and I am a Full stack Developer .. this is my wave to me
+          website ? Connect your Ethereum wallet and wave at me!
         </div>
         <input
           type="textarea"
